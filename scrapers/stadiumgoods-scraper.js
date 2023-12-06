@@ -25,6 +25,7 @@ module.exports = {
             });
 
             if (response.body.data.configurableProducts.edges[0]) {
+                // console.log('stadium ' + JSON.stringify(response.body.data.configurableProducts.edges[0]));
                 shoe.resellLinks.stadiumGoods = response.body.data.configurableProducts.edges[0].node.pdpUrl;
                 if(response.body.data.configurableProducts.edges[0].node.lowestPrice.__typename == 'DiscountedPrice'){
                     shoe.lowestResellPrice.stadiumGoods = Number(response.body.data.configurableProducts.edges[0].node.lowestPrice.originalValue.formattedValue.replace(/[^0-9.-]+/g, ""));

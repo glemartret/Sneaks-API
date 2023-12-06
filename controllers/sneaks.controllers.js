@@ -35,46 +35,67 @@ module.exports = class Sneaks {
   };*/
   async getProducts(keyword, count = 40, callback) {
 
-    var productCounter = 0;
-    stockXScraper.getProductsAndInfo(keyword, count, function (error, products) {
-      if (error) {
-        callback(error, null)
-      }
-      products.forEach(function (shoe) {
-        var cbCounter = 0;
-        flightClubScraper.getLink(shoe, function () {
-          if (++cbCounter == 3) {
-            //if all shoes links have been parsed then return
-            if (productCounter++ + 1 == products.length) {
-              callback(null, products);
-            }
+    var stockXProducts = await new Promise((resolve, reject) => {
+      stockXScraper.getProductsAndInfo(keyword, count, async function (error, products) {
+        if (error) {
+          reject(error)
+        }
+        await Promise.all((products ?? []).map(async function (shoe) {
+          var fcLink = new Promise(function (resolve, reject) {
+            flightClubScraper.getLink(shoe, function () {
+              resolve();
+            });
+          });
 
-          }
-        });
+          var sgLink = new Promise(function (resolve, reject) {
+            stadiumGoodsScraper.getLink(shoe, function () {
+              resolve();
+            });
+          });
 
-        stadiumGoodsScraper.getLink(shoe, function () {
-          if (++cbCounter == 3) {
-            //if all shoes links have been parsed then return
-            if (productCounter++ + 1 == products.length) {
-              callback(null, products);
-            }
+          var gLink = new Promise(function (resolve, reject) {
+            goatScraper.getLink(shoe, function () {
+              resolve();
+            });
+          });
 
-          }
-        });
-
-        goatScraper.getLink(shoe, function () {
-          if (++cbCounter == 3) {
-            //if all shoes links have been parsed then return
-            if (productCounter++ + 1 == products.length) {
-              callback(null, products);
-            }
-
-          }
-        });
+          return Promise.all([fcLink, sgLink, gLink]);
+        }));
+        resolve(products);
       });
-
     });
 
+    var goatProducts = await new Promise((resolve, reject) => {
+      goatScraper.getProductsAndInfo(keyword, count, async function (error, products) {
+        if (error) {
+          reject(error)
+        }
+        await Promise.all((products ?? []).map(async function (shoe) {
+          var fcLink = new Promise(function (resolve, reject) {
+            flightClubScraper.getLink(shoe, function () {
+              resolve();
+            });
+          });
+
+          var sgLink = new Promise(function (resolve, reject) {
+            stadiumGoodsScraper.getLink(shoe, function () {
+              resolve();
+            });
+          });
+
+          return Promise.all([fcLink, sgLink]);
+        }));
+        resolve(products);
+      });
+    });
+
+    var products = stockXProducts.concat(goatProducts.filter(function (gItem) {
+      return !stockXProducts.find(function (sItem) {
+        return gItem.styleID === sItem.styleID
+      })
+    }));
+
+    callback(null, products);
 
   }
 

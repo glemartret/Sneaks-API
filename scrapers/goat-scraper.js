@@ -1,9 +1,71 @@
 const got = require('got');
 const request = require('request');
-
-
+const Sneaker = require('../models/Sneaker');
 
 module.exports = {
+  getProductsAndInfo: async function (key, count, callback) {
+    try {
+      const response = await got.post('https://2fwotdvm2o-dsn.algolia.net/1/indexes/*/queries?x-algolia-agent=Algolia%20for%20vanilla%20JavaScript%20(lite)%203.25.1%3Breact%20(16.9.0)%3Breact-instantsearch%20(6.2.0)%3BJS%20Helper%20(3.1.0)&x-algolia-application-id=2FWOTDVM2O&x-algolia-api-key=ac96de6fef0e02bb95d433d8d5c7038a', {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_2) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.4 Safari/605.1.15',
+          'Content-Type': 'application/json'
+        },
+        body: '{"requests":[{"indexName":"product_variants_v2","params":"distinct=true&maxValuesPerFacet=1&page=0&query=' + key + '&facets=%5B%22instant_ship_lowest_price_cents&hitsPerPage=' + count + '"}]}',
+        http2: true,
+      });
+      var json = JSON.parse(response.body);
+      if (json.results[0]) {
+        json = json.results[0];
+      }
+
+      var products = [];
+      var numOfShoes = json.hits.length;
+
+      for (var i = 0; i < json.hits.length; i++) {
+        if (!json.hits[i].search_sku || (json.hits[i].search_sku).indexOf(' ') >= 0) {
+            numOfShoes--;
+            continue;
+        }
+
+        var shoe = new Sneaker({
+            shoeName: json.hits[i].name,
+            brand: json.hits[i].brand_name,
+            silhoutte: json.hits[i].silhouette,
+
+            styleID: json.hits[i].search_sku,
+            make: json.hits[i].silhouette,
+            colorway: json.hits[i].color,
+            retailPrice: json.hits[i].retail_price_cents_usd / 100,
+            thumbnail: json.hits[i].original_picture_url,
+            releaseDate: json.hits[i].release_year + '/' + json.hits[i].release_month,
+            description: json.hits[i].story_html,
+            // urlKey: json.hits[i].url,
+            resellLinks: {
+            //     stockX: 'https://stockx.com/' + json.hits[i].url
+              goat: 'http://www.goat.com/sneakers/' + json.hits[i].slug,
+            },
+            goatProductId: json.hits[i].product_template_id,
+        });
+        // if(json.hits[i].lowest_ask){
+        //     shoe.lowestResellPrice.stockX = json.hits[i].lowest_ask;
+        // }
+        console.log('push ' + shoe.styleID)
+        products.push(shoe)
+      }
+
+      if (products.length == 0 || numOfShoes == 0) {
+          callback(new Error('Product Not Found'), null);
+      }
+      else {
+          callback(null, products);
+      }
+    } catch (error) {
+      let err = new Error("Could not connect to Goat while searching '" + key + "' Error: ", error)
+      console.log(err);
+      callback(err)
+    }
+  },
+
   getLink: async function (shoe, callback) {
     try {
       const response = await got.post('https://2fwotdvm2o-dsn.algolia.net/1/indexes/*/queries?x-algolia-agent=Algolia%20for%20vanilla%20JavaScript%20(lite)%203.25.1%3Breact%20(16.9.0)%3Breact-instantsearch%20(6.2.0)%3BJS%20Helper%20(3.1.0)&x-algolia-application-id=2FWOTDVM2O&x-algolia-api-key=ac96de6fef0e02bb95d433d8d5c7038a', {
@@ -16,6 +78,7 @@ module.exports = {
       });
       var json = JSON.parse(response.body);
       if (json.results[0].hits[0]) {
+        // console.log('goat ' + JSON.stringify(json.results[0].hits[0]));
         if (json.results[0].hits[0].lowest_price_cents_usd / 100 != 0) {
           shoe.lowestResellPrice.goat = json.results[0].hits[0].lowest_price_cents_usd / 100;
         }
@@ -38,12 +101,12 @@ module.exports = {
       let priceMap = {};
 
       try {
-        const response = await got(apiLink, {	
+        const response = await got(apiLink, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 6.2; rv:20.0) Gecko/20121202 Firefox/20.0',
             'Content-Type': 'application/json',
           },
-          
+
           http2: true,
         });
         var json = JSON.parse(response.body);
@@ -56,7 +119,7 @@ module.exports = {
             priceMap[json[i].sizeOption.value] = json[i].lowestPriceCents.amount / 100 ;
           }
 
-          
+
         }
         shoe.resellPrices.goat = priceMap;
         callback()
